@@ -23,11 +23,26 @@ Jogue agora: https://larandreluizinfo.github.io/apocalipse_zumbi/
 - Moto
 - Rota de fuga
 
+## Modos
+
+- **1 jogador**: sobrevivência solo.
+- **2 jogadores (co-op)**: dupla local na mesma tela. Cada jogador tem vida própria; a partida termina quando os dois caem.
+
 ## Controles
 
-- **WASD** ou setas: mover
+Jogador 1:
+
+- **WASD**: mover
 - **Mouse**: mirar
 - **Clique**: atacar ou atirar
+
+Jogador 2 (co-op):
+
+- **Setas**: mover
+- **Espaço**: atacar (mira automática no zumbi mais próximo)
+
+Geral:
+
 - **1 a 6**: trocar de arma (após abrir o baú)
 - **E**: abrir ou acessar o baú
 - **M**: ligar ou desligar o som

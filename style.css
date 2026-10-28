@@ -67,22 +67,29 @@ html, body {
   letter-spacing: 0.14em;
 }
 
+.hp-block { margin-top: 8px; }
+.hp-block .label { display: block; margin-bottom: 4px; }
+
 .hp {
   position: relative;
   height: 18px;
-  margin-top: 8px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 
-#hp-fill {
+#hp-fill,
+#hp2-fill {
   height: 100%;
   width: 100%;
   border-radius: 999px;
   background: linear-gradient(90deg, #4caf50, #9dff3c);
   transition: width 0.15s linear;
+}
+
+#hp2-fill {
+  background: linear-gradient(90deg, #ff9800, #ffd54f);
 }
 
 .hp span {
@@ -327,6 +334,37 @@ kbd {
   font-size: 0.7rem;
   font-weight: 700;
   text-align: center;
+}
+
+.players-select {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.players-select .label { margin-right: 4px; }
+
+.player-btn {
+  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+
+.player-btn:hover { border-color: rgba(124, 252, 0, 0.45); }
+
+.player-btn.selected {
+  border-color: var(--green);
+  background: rgba(124, 252, 0, 0.12);
+  color: var(--green);
 }
 
 .btn {

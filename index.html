@@ -15,15 +15,25 @@
       <div class="hud-row"><span class="label">RESTAM</span><span id="remaining">0</span></div>
       <div class="hud-row"><span class="label">ABATES</span><span id="kills">0</span></div>
       <div class="hud-row"><span class="label">PONTOS</span><span id="score">0</span></div>
-      <div class="hp">
-        <div id="hp-fill"></div>
-        <span id="hp-text">100 / 100</span>
+      <div class="hp-block">
+        <span class="label">JOGADOR 1</span>
+        <div class="hp">
+          <div id="hp-fill"></div>
+          <span id="hp-text">100 / 100</span>
+        </div>
+      </div>
+      <div id="p2-hud" class="hp-block hidden">
+        <span class="label">JOGADOR 2</span>
+        <div class="hp">
+          <div id="hp2-fill"></div>
+          <span id="hp2-text">100 / 100</span>
+        </div>
       </div>
     </div>
     <div class="hud-right">
       <span class="label">ARMA</span>
       <strong id="weapon-name">Faca</strong>
-      <span class="keys">WASD mover &middot; mouse mirar &middot; clique atacar<br>1-6 trocar arma &middot; E baú &middot; M som</span>
+      <span class="keys">P1: WASD mover &middot; mouse mirar &middot; clique atacar<br>P2: setas mover &middot; mira autom&aacute;tica &middot; espa&ccedil;o atacar<br>1-6 trocar arma &middot; E ba&uacute; &middot; M som</span>
     </div>
     <div id="boss-bar" class="hidden">
       <span>CHEFE</span>
@@ -44,12 +54,18 @@
         metralhadora, facas, carros, motos e a rota de fuga.
       </p>
       <div class="controls">
-        <div><kbd>WASD</kbd><span>Mover</span></div>
-        <div><kbd>Mouse</kbd><span>Mirar</span></div>
-        <div><kbd>Clique</kbd><span>Atacar / atirar</span></div>
+        <div><kbd>WASD</kbd><span>Jogador 1 mover</span></div>
+        <div><kbd>Mouse</kbd><span>Jogador 1 mirar / atacar</span></div>
+        <div><kbd>Setas</kbd><span>Jogador 2 mover (co-op)</span></div>
+        <div><kbd>Espa&ccedil;o</kbd><span>Jogador 2 atacar (co-op)</span></div>
         <div><kbd>E</kbd><span>Abrir o ba&uacute;</span></div>
         <div><kbd>1-6</kbd><span>Trocar de arma</span></div>
         <div><kbd>M</kbd><span>Ligar / desligar som</span></div>
+      </div>
+      <div class="players-select">
+        <span class="label">JOGADORES</span>
+        <button id="players-1" class="player-btn selected" type="button">1 jogador</button>
+        <button id="players-2" class="player-btn" type="button">2 jogadores (co-op)</button>
       </div>
       <button id="start-btn" class="btn primary">Iniciar sobreviv&ecirc;ncia</button>
       <p class="authors">Enzo Pereira &middot; Enzo Chagas &middot; Alice Gomes &middot; Valentin &middot; Jos&eacute;</p>

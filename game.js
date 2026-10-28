@@ -12,6 +12,9 @@
     score: document.getElementById('score'),
     hpFill: document.getElementById('hp-fill'),
     hpText: document.getElementById('hp-text'),
+    p2Hud: document.getElementById('p2-hud'),
+    hp2Fill: document.getElementById('hp2-fill'),
+    hp2Text: document.getElementById('hp2-text'),
     weaponName: document.getElementById('weapon-name'),
     bossBar: document.getElementById('boss-bar'),
     bossFill: document.getElementById('boss-fill'),
@@ -32,6 +35,8 @@
     endStats: document.getElementById('end-stats'),
     startBtn: document.getElementById('start-btn'),
     restartBtn: document.getElementById('restart-btn'),
+    players1: document.getElementById('players-1'),
+    players2: document.getElementById('players-2'),
   };
 
   const TAU = Math.PI * 2;
@@ -79,6 +84,7 @@
   let H = window.innerHeight;
   let DPR = 1;
   let state = null;
+  let playerCount = 1;
   let muted = false;
   let audio = null;
   let toastTimer = null;
@@ -112,10 +118,70 @@
     canvas.style.width = W + 'px';
     canvas.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    if (state && state.player) {
-      state.player.x = clamp(state.player.x, 24, W - 24);
-      state.player.y = clamp(state.player.y, 24, H - 24);
+    if (state && state.players) {
+      for (const player of state.players) {
+        player.x = clamp(player.x, 24, W - 24);
+        player.y = clamp(player.y, 24, H - 24);
+      }
     }
+  }
+
+  function makePlayer(index) {
+    const offset = playerCount === 2 ? (index === 0 ? -36 : 36) : 0;
+    return {
+      index,
+      x: W / 2 + offset,
+      y: H / 2,
+      r: 16,
+      hp: 100, maxHp: 100, speed: 220,
+      angle: 0, fireCd: 0, iframe: 0,
+      weapon: 'faca',
+      dead: false,
+    };
+  }
+
+  function alivePlayers() {
+    return state.players.filter((player) => !player.dead);
+  }
+
+  function playerCenter() {
+    const alive = alivePlayers();
+    if (!alive.length) return { x: W / 2, y: H / 2 };
+    let x = 0;
+    let y = 0;
+    for (const player of alive) {
+      x += player.x;
+      y += player.y;
+    }
+    return { x: x / alive.length, y: y / alive.length };
+  }
+
+  function nearestPlayerTo(x, y) {
+    let target = null;
+    let best = Infinity;
+    for (const player of state.players) {
+      if (player.dead) continue;
+      const distance = (player.x - x) * (player.x - x) + (player.y - y) * (player.y - y);
+      if (distance < best) {
+        best = distance;
+        target = player;
+      }
+    }
+    return target;
+  }
+
+  function nearestEnemyTo(x, y) {
+    let target = null;
+    let best = Infinity;
+    for (const enemy of state.enemies) {
+      if (enemy.dead) continue;
+      const distance = (enemy.x - x) * (enemy.x - x) + (enemy.y - y) * (enemy.y - y);
+      if (distance < best) {
+        best = distance;
+        target = enemy;
+      }
+    }
+    return target;
   }
 
   function createState() {
@@ -137,12 +203,7 @@
       arsenalUnlocked: false,
       vehicle: null,
       chest: null,
-      player: {
-        x: W / 2, y: H / 2, r: 16,
-        hp: 100, maxHp: 100, speed: 220,
-        angle: 0, fireCd: 0, iframe: 0,
-        weapon: 'faca',
-      },
+      players: Array.from({ length: playerCount }, (_, index) => makePlayer(index)),
       enemies: [],
       bullets: [],
       particles: [],
@@ -249,6 +310,7 @@
 
   function spawnPosition(radius) {
     const margin = radius + 14;
+    const center = playerCenter();
     let point = { x: W / 2, y: margin };
     for (let attempt = 0; attempt < 12; attempt++) {
       const side = Math.floor(Math.random() * 4);
@@ -256,8 +318,8 @@
       else if (side === 1) point = { x: W - margin, y: rand(margin, H - margin) };
       else if (side === 2) point = { x: rand(margin, W - margin), y: H - margin };
       else point = { x: margin, y: rand(margin, H - margin) };
-      const dx = point.x - state.player.x;
-      const dy = point.y - state.player.y;
+      const dx = point.x - center.x;
+      const dy = point.y - center.y;
       if (dx * dx + dy * dy > 230 * 230) break;
     }
     return point;
@@ -367,9 +429,8 @@
     }
   }
 
-  function damagePlayer(amount) {
-    const player = state.player;
-    if (player.iframe > 0 || state.mode !== 'playing') return;
+  function damagePlayer(player, amount) {
+    if (player.dead || player.iframe > 0 || state.mode !== 'playing') return;
     player.hp -= amount;
     player.iframe = 0.55;
     state.shake = Math.max(state.shake, 12);
@@ -377,18 +438,24 @@
     sfx('hurt');
     if (player.hp <= 0) {
       player.hp = 0;
+      player.dead = true;
       burst(player.x, player.y, '#ff5252', 30, 260, 4, 0.9);
-      endGame(false);
+      if (alivePlayers().length === 0) {
+        endGame(false);
+      } else {
+        showToast(`JOGADOR ${player.index + 1} CAIU`, 'O outro sobrevivente continua');
+        sfx('lose');
+      }
     }
   }
 
-  function attack() {
-    const player = state.player;
+  function attack(player) {
     const weapon = WEAPONS[player.weapon];
     player.fireCd = weapon.cooldown;
 
     if (weapon.kind === 'melee') {
       state.swings.push({
+        owner: player.index,
         angle: player.angle,
         range: weapon.range,
         arc: weapon.arc,
@@ -411,7 +478,7 @@
       return;
     }
 
-    const baseAngle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+    const baseAngle = player.angle;
     const spread = weapon.spread || 0;
     const angle = baseAngle + (Math.random() - 0.5) * spread;
     state.bullets.push({
@@ -429,15 +496,15 @@
   }
 
   function updateEnemies(dt) {
-    const player = state.player;
-
     for (const enemy of state.enemies) {
       if (enemy.dead) continue;
       enemy.hitCd = Math.max(0, enemy.hitCd - dt);
       enemy.flash = Math.max(0, enemy.flash - dt);
 
-      const dx = player.x - enemy.x;
-      const dy = player.y - enemy.y;
+      const target = nearestPlayerTo(enemy.x, enemy.y);
+      if (!target) continue;
+      const dx = target.x - enemy.x;
+      const dy = target.y - enemy.y;
       const distance = Math.hypot(dx, dy) || 1;
       enemy.x += (dx / distance) * enemy.speed * dt;
       enemy.y += (dy / distance) * enemy.speed * dt;
@@ -465,11 +532,14 @@
 
     for (const enemy of state.enemies) {
       if (enemy.dead) continue;
-      const dx = player.x - enemy.x;
-      const dy = player.y - enemy.y;
-      if (Math.hypot(dx, dy) < enemy.r + player.r + 2 && enemy.hitCd <= 0) {
-        enemy.hitCd = 0.85;
-        damagePlayer(enemy.damage);
+      for (const player of state.players) {
+        if (player.dead) continue;
+        const dx = player.x - enemy.x;
+        const dy = player.y - enemy.y;
+        if (Math.hypot(dx, dy) < enemy.r + player.r + 2 && enemy.hitCd <= 0) {
+          enemy.hitCd = 0.85;
+          damagePlayer(player, enemy.damage);
+        }
       }
     }
 
@@ -500,17 +570,18 @@
   }
 
   function updatePickups(dt) {
-    const player = state.player;
     for (const pickup of state.pickups) {
       pickup.life -= dt;
       pickup.phase += dt * 4;
       if (pickup.life <= 0) continue;
-      if (Math.hypot(player.x - pickup.x, player.y - pickup.y) < pickup.r + player.r + 6) {
-        if (player.hp < player.maxHp) {
+      for (const player of state.players) {
+        if (player.dead || player.hp >= player.maxHp) continue;
+        if (Math.hypot(player.x - pickup.x, player.y - pickup.y) < pickup.r + player.r + 6) {
           player.hp = Math.min(player.maxHp, player.hp + 15);
           pickup.life = 0;
           burst(pickup.x, pickup.y, '#69f0ae', 12, 120, 3, 0.5);
           sfx('pickup');
+          break;
         }
       }
     }
@@ -538,27 +609,46 @@
 
     if (state.mode !== 'playing') return;
 
-    const player = state.player;
-    player.iframe = Math.max(0, player.iframe - dt);
-    player.fireCd = Math.max(0, player.fireCd - dt);
-
-    let moveX = 0;
-    let moveY = 0;
-    if (keys.has('d') || keys.has('arrowright')) moveX += 1;
-    if (keys.has('a') || keys.has('arrowleft')) moveX -= 1;
-    if (keys.has('s') || keys.has('arrowdown')) moveY += 1;
-    if (keys.has('w') || keys.has('arrowup')) moveY -= 1;
-    const moveLength = Math.hypot(moveX, moveY);
-    if (moveLength > 0) {
-      moveX /= moveLength;
-      moveY /= moveLength;
-    }
     const speedMultiplier = state.vehicle === 'carro' ? 1.12 : state.vehicle === 'moto' ? 1.3 : 1;
-    player.x = clamp(player.x + moveX * player.speed * speedMultiplier * dt, 22, W - 22);
-    player.y = clamp(player.y + moveY * player.speed * speedMultiplier * dt, 22, H - 22);
-    player.angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
 
-    if (mouse.down && player.fireCd <= 0) attack();
+    for (const player of state.players) {
+      if (player.dead) continue;
+      player.iframe = Math.max(0, player.iframe - dt);
+      player.fireCd = Math.max(0, player.fireCd - dt);
+
+      let moveX = 0;
+      let moveY = 0;
+      if (player.index === 0) {
+        const arrows = playerCount === 1;
+        if (keys.has('d') || (arrows && keys.has('arrowright'))) moveX += 1;
+        if (keys.has('a') || (arrows && keys.has('arrowleft'))) moveX -= 1;
+        if (keys.has('s') || (arrows && keys.has('arrowdown'))) moveY += 1;
+        if (keys.has('w') || (arrows && keys.has('arrowup'))) moveY -= 1;
+      } else {
+        if (keys.has('arrowright')) moveX += 1;
+        if (keys.has('arrowleft')) moveX -= 1;
+        if (keys.has('arrowdown')) moveY += 1;
+        if (keys.has('arrowup')) moveY -= 1;
+      }
+      const moveLength = Math.hypot(moveX, moveY);
+      if (moveLength > 0) {
+        moveX /= moveLength;
+        moveY /= moveLength;
+      }
+      player.x = clamp(player.x + moveX * player.speed * speedMultiplier * dt, 22, W - 22);
+      player.y = clamp(player.y + moveY * player.speed * speedMultiplier * dt, 22, H - 22);
+
+      if (player.index === 0) {
+        player.angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+      } else {
+        const target = nearestEnemyTo(player.x, player.y);
+        if (target) player.angle = Math.atan2(target.y - player.y, target.x - player.x);
+        else if (moveLength > 0) player.angle = Math.atan2(moveY, moveX);
+      }
+
+      const wantsFire = player.index === 0 ? mouse.down : keys.has(' ');
+      if (wantsFire && player.fireCd <= 0) attack(player);
+    }
 
     updateEnemies(dt);
     updateBullets(dt);
@@ -603,7 +693,7 @@
   function selectWeapon(key) {
     if (!WEAPONS[key]) return;
     if (!state.arsenalUnlocked && key !== 'faca') return;
-    state.player.weapon = key;
+    for (const player of state.players) player.weapon = key;
     ui.weaponName.textContent = WEAPONS[key].name;
     if (state.mode === 'loot') renderLoot();
   }
@@ -612,8 +702,10 @@
     if (state.vehicle) return;
     state.vehicle = type;
     if (type === 'carro') {
-      state.player.maxHp += 60;
-      state.player.hp = Math.min(state.player.maxHp, state.player.hp + 60);
+      for (const player of state.players) {
+        player.maxHp += 60;
+        player.hp = Math.min(player.maxHp, player.hp + 60);
+      }
     }
     showToast(type === 'carro' ? 'CARRO BLINDADO' : 'MOTO', type === 'carro' ? '+60 de vida e +12% de velocidade' : '+30% de velocidade');
     if (state.mode === 'loot') {
@@ -629,7 +721,7 @@
       const weapon = WEAPONS[key];
       const card = document.createElement('button');
       card.type = 'button';
-      card.className = 'loot-card' + (state.player.weapon === key ? ' selected' : '');
+      card.className = 'loot-card' + (state.players[0].weapon === key ? ' selected' : '');
       card.innerHTML = `
         <span class="key">${index + 1}</span>
         <strong>${weapon.name}</strong>
@@ -676,8 +768,13 @@
 
   function tryOpenChest() {
     if (state.mode !== 'playing' || !state.chest) return;
-    const player = state.player;
-    if (Math.hypot(player.x - state.chest.x, player.y - state.chest.y) < 100) openLoot();
+    for (const player of state.players) {
+      if (player.dead) continue;
+      if (Math.hypot(player.x - state.chest.x, player.y - state.chest.y) < 100) {
+        openLoot();
+        return;
+      }
+    }
   }
 
   function endGame(won) {
@@ -687,14 +784,16 @@
     ui.hud.classList.add('hidden');
     ui.bossBar.classList.add('hidden');
 
+    const survivors = alivePlayers().length;
+
     if (won) {
       ui.endEyebrow.textContent = 'Rota de fuga';
-      ui.endTitle.textContent = 'Você escapou!';
+      ui.endTitle.textContent = playerCount === 2 ? 'Vocês escaparam!' : 'Você escapou!';
       ui.endTitle.style.color = 'var(--green)';
       ui.endMessage.textContent = `A ${state.vehicle === 'carro' ? 'carro blindado' : 'moto'} cortou a horda e deixou a cidade para trás.`;
     } else {
       ui.endEyebrow.textContent = 'Fim da linha';
-      ui.endTitle.textContent = 'Você caiu';
+      ui.endTitle.textContent = playerCount === 2 ? 'A dupla caiu' : 'Você caiu';
       ui.endTitle.style.color = '#ff8a80';
       ui.endMessage.textContent = `A horda te alcançou na rodada ${state.round}.`;
     }
@@ -703,28 +802,39 @@
       statBlock('RODADAS', won ? '10 / 10' : `${state.round} / 10`),
       statBlock('ABATES', state.kills),
       statBlock('PONTOS', state.score),
-      statBlock('ARMA FINAL', WEAPONS[state.player.weapon].name),
+      statBlock('ARMA FINAL', WEAPONS[state.players[0].weapon].name),
     ];
+    if (playerCount === 2) stats.push(statBlock('SOBREVIVENTES', `${survivors} / 2`));
     if (state.vehicle) stats.push(statBlock('VEÍCULO', state.vehicle === 'carro' ? 'Carro blindado' : 'Moto'));
     ui.endStats.innerHTML = stats.join('');
     ui.end.classList.remove('hidden');
     sfx(won ? 'win' : 'lose');
   }
 
+  function paintHp(fill, text, player) {
+    const hpPercent = Math.max(0, (player.hp / player.maxHp) * 100);
+    fill.style.width = `${hpPercent}%`;
+    if (fill === ui.hpFill) {
+      fill.style.background = hpPercent <= 30
+        ? 'linear-gradient(90deg, #b71c1c, #ff5252)'
+        : 'linear-gradient(90deg, #4caf50, #9dff3c)';
+    }
+    text.textContent = `${Math.ceil(player.hp)} / ${player.maxHp}`;
+  }
+
   function updateHud() {
     if (!state) return;
-    const player = state.player;
+    const player = state.players[0];
     ui.round.textContent = state.endless ? 'INFINITO' : `${state.round} / 10`;
     ui.remaining.textContent = state.endless ? state.enemies.length : Math.max(0, state.totalToSpawn - state.roundKills);
     ui.kills.textContent = state.kills;
     ui.score.textContent = state.score;
-    const hpPercent = Math.max(0, (player.hp / player.maxHp) * 100);
-    ui.hpFill.style.width = `${hpPercent}%`;
-    ui.hpFill.style.background = hpPercent <= 30
-      ? 'linear-gradient(90deg, #b71c1c, #ff5252)'
-      : 'linear-gradient(90deg, #4caf50, #9dff3c)';
-    ui.hpText.textContent = `${Math.ceil(player.hp)} / ${player.maxHp}`;
+    paintHp(ui.hpFill, ui.hpText, player);
     ui.weaponName.textContent = WEAPONS[player.weapon].name;
+
+    const second = state.players[1];
+    ui.p2Hud.classList.toggle('hidden', playerCount < 2);
+    if (second) paintHp(ui.hp2Fill, ui.hp2Text, second);
 
     const boss = state.enemies.find((enemy) => enemy.boss && !enemy.dead);
     if (boss) {
@@ -734,16 +844,19 @@
       ui.bossBar.classList.add('hidden');
     }
 
-    if (state.chest && state.mode === 'playing') {
-      const distance = Math.hypot(player.x - state.chest.x, player.y - state.chest.y);
-      if (distance < 100) {
-        ui.prompt.innerHTML = state.lootOpened
-          ? 'Pressione <b>E</b> para acessar o baú'
-          : 'Pressione <b>E</b> para abrir o baú';
-        ui.prompt.classList.remove('hidden');
-      } else {
-        ui.prompt.classList.add('hidden');
+    let chestDistance = Infinity;
+    if (state.chest) {
+      for (const current of state.players) {
+        if (current.dead) continue;
+        chestDistance = Math.min(chestDistance, Math.hypot(current.x - state.chest.x, current.y - state.chest.y));
       }
+    }
+
+    if (state.chest && state.mode === 'playing' && chestDistance < 100) {
+      ui.prompt.innerHTML = state.lootOpened
+        ? 'Pressione <b>E</b> para acessar o baú'
+        : 'Pressione <b>E</b> para abrir o baú';
+      ui.prompt.classList.remove('hidden');
     } else {
       ui.prompt.classList.add('hidden');
     }
@@ -879,7 +992,8 @@
       }
     }
 
-    const lookAngle = Math.atan2(state.player.y - enemy.y, state.player.x - enemy.x);
+    const target = nearestPlayerTo(enemy.x, enemy.y);
+    const lookAngle = target ? Math.atan2(target.y - enemy.y, target.x - enemy.x) : 0;
     const eyeX = Math.cos(lookAngle) * enemy.r * 0.48;
     const eyeY = Math.sin(lookAngle) * enemy.r * 0.48;
     const sideX = Math.cos(lookAngle + Math.PI / 2) * enemy.r * 0.32;
@@ -903,9 +1017,11 @@
     ctx.restore();
   }
 
-  function drawPlayer() {
-    const player = state.player;
+  function drawPlayer(player) {
+    if (player.dead) return;
     const weapon = WEAPONS[player.weapon];
+    const bodyColor = player.index === 0 ? '#3fa7d6' : '#ff9f43';
+    const accentColor = player.index === 0 ? '#e8f6ff' : '#fff3e0';
 
     ctx.save();
     ctx.translate(player.x, player.y);
@@ -965,15 +1081,15 @@
       ctx.fillRect(13, 3, 9, 4);
     }
 
-    ctx.fillStyle = '#3fa7d6';
+    ctx.fillStyle = bodyColor;
     ctx.beginPath();
     ctx.arc(0, 0, player.r, 0, TAU);
     ctx.fill();
-    ctx.strokeStyle = '#e8f6ff';
+    ctx.strokeStyle = accentColor;
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    ctx.fillStyle = '#e8f6ff';
+    ctx.fillStyle = accentColor;
     ctx.beginPath();
     ctx.arc(0, 0, player.r * 0.38, -0.7, 0.7);
     ctx.lineTo(0, 0);
@@ -985,11 +1101,12 @@
   }
 
   function drawSwings() {
-    const player = state.player;
     for (const swing of state.swings) {
+      const owner = state.players[swing.owner];
+      if (!owner || owner.dead) continue;
       const alpha = swing.life / swing.maxLife;
       ctx.save();
-      ctx.translate(player.x, player.y);
+      ctx.translate(owner.x, owner.y);
       ctx.rotate(swing.angle);
       ctx.globalAlpha = alpha * 0.75;
       ctx.strokeStyle = swing.color;
@@ -1049,7 +1166,7 @@
       ctx.stroke();
     }
 
-    drawPlayer();
+    for (const player of state.players) drawPlayer(player);
     drawParticles();
     ctx.restore();
 
@@ -1114,6 +1231,14 @@
 
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
+  function setPlayerCount(count) {
+    playerCount = count === 2 ? 2 : 1;
+    ui.players1.classList.toggle('selected', playerCount === 1);
+    ui.players2.classList.toggle('selected', playerCount === 2);
+  }
+
+  ui.players1.addEventListener('click', () => setPlayerCount(1));
+  ui.players2.addEventListener('click', () => setPlayerCount(2));
   ui.startBtn.addEventListener('click', startGame);
   ui.restartBtn.addEventListener('click', startGame);
   ui.continueBtn.addEventListener('click', continueFighting);
